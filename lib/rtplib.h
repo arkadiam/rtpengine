@@ -24,6 +24,9 @@ struct rtp_payload_type {
 };
 
 
+#define ZRTP_COOKIE htonl(0x5a525450UL)
+
+
 extern const struct rtp_payload_type rfc_rtp_payload_types[];
 extern const int num_rfc_rtp_payload_types;
 

@@ -15,6 +15,7 @@
 #include "media_socket.h"
 #include "rtcplib.h"
 #include "ssrc.h"
+#include "rtplib.h"
 
 
 
@@ -651,7 +652,11 @@ static int __rtcp_parse(GQueue *q, const str *_s, struct stream_fd *sfd, const e
 		if (!(hdr = rtcp_length_check(&s, sizeof(*hdr), &len)))
 			break;
 
-		if (hdr->version != 2) {
+		if (G_UNLIKELY(hdr->version != 2)) {
+			struct rtcp_packet *pkt = (void *) hdr;
+			if (hdr->version == 0 && hdr->p == 0 && hdr->count == 0x10 && s.len >= sizeof(*pkt)
+					&& pkt->ssrc == ZRTP_COOKIE)
+				goto zrtp;
 			ilog(LOG_WARN, "Unknown RTCP version %u", hdr->version);
 			goto error;
 		}
@@ -698,6 +703,7 @@ next:
 	return 0;
 
 error:
+zrtp:
 	CAH(finish, c, src, &sfd->socket.local, tv);
 	CAH(destroy);
 	rtcp_list_free(q);
@@ -792,8 +798,12 @@ int rtcp_payload(struct rtcp_packet **out, str *p, const str *s) {
 	rtcp = (void *) s->s;
 
 	err = "invalid header version";
-	if (rtcp->header.version != 2)
+	if (G_UNLIKELY(rtcp->header.version != 2)) {
+		if (rtcp->header.version == 0 && rtcp->header.p == 0 && rtcp->header.count == 0x10
+				&& rtcp->ssrc == ZRTP_COOKIE)
+			goto zrtp;
 		goto error;
+	}
 	err = "invalid packet type";
 	if (rtcp->header.pt != RTCP_PT_SR
 			&& rtcp->header.pt != RTCP_PT_RR)
@@ -810,6 +820,7 @@ done:
 	return 0;
 error:
 	ilog(LOG_WARNING | LOG_FLAG_LIMIT, "Error parsing RTCP header: %s", err);
+zrtp:
 	return -1;
 }
 

@@ -66,8 +66,11 @@ int rtp_payload(struct rtp_header **out, str *p, const str *s) {
 
 	rtp = (void *) s->s;
 	err = "invalid header version";
-	if ((rtp->v_p_x_cc & 0xc0) != 0x80) /* version 2 */
+	if (G_UNLIKELY((rtp->v_p_x_cc & 0xc0) != 0x80)) { /* version 2 */
+		if (rtp->v_p_x_cc == 0x10 && rtp->timestamp == ZRTP_COOKIE)
+			goto zrtp;
 		goto error;
+	}
 
 	if (!p)
 		goto done;
@@ -98,6 +101,7 @@ done:
 
 error:
 	ilog(LOG_WARNING | LOG_FLAG_LIMIT, "Error parsing RTP header: %s", err);
+zrtp:
 	return -1;
 }
 
